@@ -1,4 +1,24 @@
-on: [push]
+on:
+  push:
+    branches: [master, main]
+    tags:
+      - "v*"
+      - "*.*"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Also publish GitHub release assets (otherwise only artifacts)."
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: "Release tag/name to publish when publish_release=true (defaults to ref name)."
+        required: false
+        type: string
+
+permissions:
+  contents: write
 
 env:
   OSG_INSTALL_PATH: /tmp/OpenSceneGraph-install
@@ -68,14 +88,27 @@ jobs:
     - name: Rearrange SCONE into portable install dir
       run: cd $GITHUB_WORKSPACE && ./tools/mac_3_create-install-dirtree
 
-    # - name: Create .dmg file from the tree
-    #   run: cd $GITHUB_WORKSPACE && ./tools/mac_4_create-dmg
+    - name: Create .dmg file from the tree
+      run: cd $GITHUB_WORKSPACE && ./tools/mac_4_create-dmg
 
-    # - name: Upload DMG file as an artifact
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: sconestudio.dmg
-    #     path: build/*.dmg
+    - name: Upload DMG file as an artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sconestudio-dmg
+        path: build/*.dmg
+
+    - name: Set release tag
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' || github.ref_type == 'tag' }}
+      run: echo "RELEASE_TAG=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '' && github.event.inputs.release_tag || github.ref_name }}" >> $GITHUB_ENV
+
+    - name: Upload DMG to GitHub Release
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' || github.ref_type == 'tag' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/*.dmg
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: ${{ env.RELEASE_TAG }}
+        fail_on_unmatched_files: true
 
   linux:
     name: Build on Ubuntu 24.04
@@ -157,3 +190,15 @@ jobs:
         name: deb-installer.zip
         path: build/*.deb
 
+    - name: Set release tag
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' || github.ref_type == 'tag' }}
+      run: echo "RELEASE_TAG=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '' && github.event.inputs.release_tag || github.ref_name }}" >> $GITHUB_ENV
+
+    - name: Upload deb to GitHub Release
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' || github.ref_type == 'tag' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/*.deb
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: ${{ env.RELEASE_TAG }}
+        fail_on_unmatched_files: true
