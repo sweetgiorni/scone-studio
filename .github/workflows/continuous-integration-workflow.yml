@@ -40,6 +40,9 @@ jobs:
       with:
         cmakeVersion: 3.27.9
 
+    - name: Check cmake version
+      run: cmake --version
+
     - name: Get Brew
       run: /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 
@@ -70,6 +73,8 @@ jobs:
     - name: Build simbody (if not cached)
       if: steps.cache_simbody.outputs.cache-hit != 'true'
       run: cd $GITHUB_WORKSPACE && ./tools/unix_2b_build-simbody
+
+
 
     - name: Cache opensim3
       id: cache_opensim3
@@ -199,6 +204,97 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: build/*.deb
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: ${{ env.RELEASE_TAG }}
+        fail_on_unmatched_files: true
+
+  windows:
+    name: Build on Windows (Visual Studio 2022)
+    runs-on: windows-2022
+    env:
+      OSG_INSTALL_PATH: C:\\OpenSceneGraph-install
+      OPENSIM3_INSTALL_PATH: C:\\opensim3-install
+      SIMBODY_INSTALL_PATH: C:\\simbody-install
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup CMake 3.27
+      uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: 3.27.9
+
+    - name: Install NSIS (for CPack) and 7zip
+      run: |
+        choco feature enable -n=allowGlobalConfirmation
+        choco install -y nsis 7zip
+      shell: pwsh
+
+    - name: Get Dependencies (Windows)
+      # This is a lightweight bootstrap. In production you'll want to use
+      # prebuilt binaries for OSG, OpenSim or use vcpkg. See BUILD.md for
+      # recommended ways to provide OpenSim/OpenSceneGraph/Qt on Windows.
+      run: cd $GITHUB_WORKSPACE && powershell -ExecutionPolicy Bypass -File .\tools\windows_1_get-dependencies.ps1
+
+    - name: Cache openscenegraph
+      id: cache_osg
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.OSG_INSTALL_PATH }}
+        key: ${{ runner.os }}-osg-${{ hashFiles('OpenSceneGraph/src') }}
+
+    - name: Build openscenegraph (if not cached)
+      if: steps.cache_osg.outputs.cache-hit != 'true'
+      run: |
+        powershell -ExecutionPolicy Bypass -File .\tools\windows_2a_build-osg.ps1
+
+    - name: Cache simbody
+      id: cache_simbody
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.SIMBODY_INSTALL_PATH }}
+        key: ${{ runner.os }}-simbody-${{ hashFiles('simbody/Simbody') }}
+
+    - name: Build simbody (if not cached)
+      if: steps.cache_simbody.outputs.cache-hit != 'true'
+      run: |
+        powershell -ExecutionPolicy Bypass -File .\tools\windows_2b_build-simbody.ps1
+
+    - name: Cache opensim3
+      id: cache_opensim3
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.OPENSIM3_INSTALL_PATH }}
+        key: ${{ runner.os }}-opensim3-${{ hashFiles('opensim3-scone/OpenSim') }}
+
+    - name: Build opensim3 (if not cached)
+      if: steps.cache_opensim3.outputs.cache-hit != 'true'
+      run: |
+        powershell -ExecutionPolicy Bypass -File .\tools\windows_2c_build-opensim3.ps1
+
+    - name: Build SCONE (windows script)
+      run: powershell -ExecutionPolicy Bypass -File .\tools\windows_2d_build-scone.ps1
+
+    - name: Generate installer (CPack NSIS)
+      run: |
+        cd build && cpack -G NSIS
+
+    - name: Upload installer artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sconestudio-nsis
+        path: build/*.exe
+
+    - name: Set release tag
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' || github.ref_type == 'tag' }}
+      run: echo "RELEASE_TAG=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '' && github.event.inputs.release_tag || github.ref_name }}" >> $GITHUB_ENV
+
+    - name: Upload installer to GitHub Release
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' || github.ref_type == 'tag' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/*.exe
         tag_name: ${{ env.RELEASE_TAG }}
         name: ${{ env.RELEASE_TAG }}
         fail_on_unmatched_files: true
