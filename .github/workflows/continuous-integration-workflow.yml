@@ -235,7 +235,10 @@ jobs:
       # This is a lightweight bootstrap. In production you'll want to use
       # prebuilt binaries for OSG, OpenSim or use vcpkg. See BUILD.md for
       # recommended ways to provide OpenSim/OpenSceneGraph/Qt on Windows.
-      run: cd $GITHUB_WORKSPACE && powershell -ExecutionPolicy Bypass -File .\tools\windows_1_get-dependencies.ps1
+      shell: pwsh
+      working-directory: ${{ github.workspace }}
+      run: |
+        ./tools/windows_1_get-dependencies.ps1
 
     - name: Cache openscenegraph
       id: cache_osg
@@ -246,8 +249,10 @@ jobs:
 
     - name: Build openscenegraph (if not cached)
       if: steps.cache_osg.outputs.cache-hit != 'true'
+      shell: pwsh
+      working-directory: ${{ github.workspace }}
       run: |
-        powershell -ExecutionPolicy Bypass -File .\tools\windows_2a_build-osg.ps1
+        ./tools/windows_2a_build-osg.ps1
 
     - name: Cache simbody
       id: cache_simbody
@@ -258,8 +263,10 @@ jobs:
 
     - name: Build simbody (if not cached)
       if: steps.cache_simbody.outputs.cache-hit != 'true'
+      shell: pwsh
+      working-directory: ${{ github.workspace }}
       run: |
-        powershell -ExecutionPolicy Bypass -File .\tools\windows_2b_build-simbody.ps1
+        ./tools/windows_2b_build-simbody.ps1
 
     - name: Cache opensim3
       id: cache_opensim3
@@ -270,15 +277,22 @@ jobs:
 
     - name: Build opensim3 (if not cached)
       if: steps.cache_opensim3.outputs.cache-hit != 'true'
+      shell: pwsh
+      working-directory: ${{ github.workspace }}
       run: |
-        powershell -ExecutionPolicy Bypass -File .\tools\windows_2c_build-opensim3.ps1
+        ./tools/windows_2c_build-opensim3.ps1
 
     - name: Build SCONE (windows script)
-      run: powershell -ExecutionPolicy Bypass -File .\tools\windows_2d_build-scone.ps1
+      shell: pwsh
+      working-directory: ${{ github.workspace }}
+      run: |
+        ./tools/windows_2d_build-scone.ps1
 
     - name: Generate installer (CPack NSIS)
+      shell: pwsh
       run: |
-        cd build && cpack -G NSIS
+        cpack -G NSIS
+      working-directory: ${{ github.workspace }}/build
 
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
